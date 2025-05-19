@@ -63,19 +63,37 @@ The implementation follows a two-layer architecture:
 If the installer script doesn't work for your environment:
 
 1. **Build the project** as described above
-2. **Create a host script** in `~/.nanobrowser/bin/mcp-host.sh`:
+2. **Create necessary directories**:
+   ```bash
+   mkdir -p ~/.nanobrowser/logs
+   mkdir -p ~/.nanobrowser/bin
+   mkdir -p ~/.nanobrowser/app
+   ```
+
+3. **Copy application files**:
+   ```bash
+   cp -r dist/* ~/.nanobrowser/app/
+   ```
+
+4. **Create a host script** in `~/.nanobrowser/bin/mcp-host.sh`:
    ```bash
    #!/bin/bash
    
+   # Set log level
    export LOG_LEVEL=INFO
-   LOGS_DIR="$HOME/.nanobrowser/logs"
-   mkdir -p "$LOGS_DIR"
    
-   LOG_FILE="$LOGS_DIR/mcp-host.log"
-   echo "Starting MCP Host at $(date)" > "$LOG_FILE"
+   # Set log directory and file
+   export LOG_DIR="$HOME/.nanobrowser/logs"
+   export LOG_FILE="mcp-host.log"
    
-   cd "/path/to/nanobrowser-mcp-host"
-   node dist/index.js 2>> "$LOG_FILE"
+   # Create logs directory if it doesn't exist
+   mkdir -p "$LOG_DIR"
+   
+   # Use the installed application files
+   cd "$HOME/.nanobrowser/app"
+   
+   # Run MCP host - logs are handled internally by the Logger class
+   node index.js
    ```
 
 3. **Make it executable**:

@@ -13,11 +13,13 @@
     "test:watch": "LOG_LEVEL=debug vitest",
     "test:unit": "LOG_LEVEL=debug vitest run tests/unit",
     "test:integration": "LOG_LEVEL=debug TEST_TYPE=integration vitest run tests/integration",
-    "test:integration:single": "LOG_LEVEL=debug TEST_TYPE=integration vitest run tests/integration/cases/run-task.test.ts"
+    "test:integration:single": "LOG_LEVEL=debug TEST_TYPE=integration vitest run tests/integration/cases/process-lifecycle.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.1",
     "express": "^4.18.2",
+    "iconv": "^3.0.1",
+    "iconv-lite": "^0.6.3",
     "zod": "^3.22.4"
   },
   "devDependencies": {

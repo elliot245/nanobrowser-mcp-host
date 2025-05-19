@@ -34,19 +34,67 @@ export default defineConfig({
 
     rollupOptions: {
       external: [
-        'express',
-        'zod',
+        // Node.js built-ins
         'async_hooks',
-        'string_decoder',
+        'buffer',
+        'child_process',
+        'cluster',
+        'console',
+        'constants',
         'crypto',
-        'os',
+        'dgram',
+        'dns',
+        'domain',
+        'events',
         'fs',
-        'path',
         'http',
+        'http2',
+        'https',
+        'inspector',
+        'module',
+        'net',
+        'os',
+        'path',
+        'perf_hooks',
+        'process',
+        'punycode',
+        'querystring',
+        'readline',
+        'repl',
+        'stream',
+        'string_decoder',
+        'timers',
+        'tls',
+        'trace_events',
+        'tty',
         'url',
-        'node:crypto',
-        '@modelcontextprotocol/sdk',
+        'util',
+        'v8',
+        'vm',
+        'wasi',
+        'worker_threads',
+        'zlib',
+        // Node.js namespaced imports
+        /^node:.*/,
+        
+        // Problematic modules that should be kept external
+        'iconv',
+        'iconv-lite',
+        'encoding',
+        'encoding-japanese',
+        'safer-buffer',
+        'buffer-from'
       ],
+      output: {
+        // Ensure proper interoperability
+        format: 'es',
+        // Fix for circular dependencies in bundled modules
+        manualChunks: undefined,
+        // Add source-mapping for better debugging
+        sourcemap: true,
+        // Prevent minification for better debugging
+        minifyInternalExports: false
+      }
     },
   },
   optimizeDeps: {
