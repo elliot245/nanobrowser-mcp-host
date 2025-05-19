@@ -1,0 +1,150 @@
+# Nanobrowser MCP Host
+
+A Chrome Native Messaging Host implementation for the Model Context Protocol (MCP), enabling secure communication between Chrome extensions and AI systems.
+
+## Overview
+
+Nanobrowser MCP Host provides a standardized interface for AI systems to interact with browser functionality through:
+
+- **Browser Resources**: Access to DOM structures, page states, and browser information
+- **Browser Tools**: Navigation, element interaction, and other browser operations
+- **Secure Communication**: Chrome Native Messaging for secure local communication
+
+The implementation follows a two-layer architecture:
+1. External interface via HTTP/MCP protocol for AI systems
+2. Internal interface via Chrome Native Messaging for browser communication
+
+## Features
+
+- **MCP Protocol Support**: Standardized interface following the Model Context Protocol
+- **Resource Exposure**: Browser DOM, state, and other information as MCP resources
+- **Tool Integration**: Browser operations (navigation, etc.) as callable MCP tools
+- **Secure by Design**: Local-only communication with proper security boundaries
+
+## Requirements
+
+- **Node.js**: v14 or higher
+- **Chrome/Chromium**: Latest version recommended
+- **Operating System**: Linux or macOS (Windows support coming soon)
+- **Chrome Extension**: A companion extension with Native Messaging permissions
+
+## Installation
+
+### Quick Setup
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/nanobrowser/nanobrowser-mcp-host.git
+   cd nanobrowser-mcp-host
+   ```
+
+2. **Build the project**:
+   ```bash
+   # Install dependencies
+   npm install
+   
+   # Build the project
+   npm run build
+   ```
+
+3. **Run the installer script**:
+   ```bash
+   ./install.sh
+   ```
+
+4. **Follow the prompts**:
+   - Enter your Chrome extension ID
+   - Choose log level (ERROR, WARN, INFO, DEBUG)
+
+5. **Restart Chrome** to apply the changes
+
+### Manual Installation
+
+If the installer script doesn't work for your environment:
+
+1. **Build the project** as described above
+2. **Create a host script** in `~/.nanobrowser/bin/mcp-host.sh`:
+   ```bash
+   #!/bin/bash
+   
+   export LOG_LEVEL=INFO
+   LOGS_DIR="$HOME/.nanobrowser/logs"
+   mkdir -p "$LOGS_DIR"
+   
+   LOG_FILE="$LOGS_DIR/mcp-host.log"
+   echo "Starting MCP Host at $(date)" > "$LOG_FILE"
+   
+   cd "/path/to/nanobrowser-mcp-host"
+   node dist/index.js 2>> "$LOG_FILE"
+   ```
+
+3. **Make it executable**:
+   ```bash
+   chmod +x ~/.nanobrowser/bin/mcp-host.sh
+   ```
+
+4. **Create a manifest file** in the appropriate Chrome Native Messaging directory:
+   ```json
+   {
+     "name": "dev.nanobrowser.mcp.host",
+     "description": "Nanobrowser MCP Native Messaging Host",
+     "path": "/home/username/.nanobrowser/bin/mcp-host.sh",
+     "type": "stdio",
+     "allowed_origins": ["chrome-extension://your-extension-id/"]
+   }
+   ```
+
+5. **Place the manifest file** in the correct location:
+   - Linux: `~/.config/google-chrome/NativeMessagingHosts/`
+   - macOS: `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/`
+
+## Usage
+
+### Configuration
+
+The host can be configured through environment variables:
+
+- `LOG_LEVEL`: Set logging verbosity (ERROR, WARN, INFO, DEBUG)
+- `PORT`: HTTP server port (default: 7890)
+
+### Log Files
+
+Logs are written to:
+```
+~/.nanobrowser/logs/mcp-host.log
+```
+
+### Troubleshooting
+
+If you encounter issues:
+
+1. Check the log file for detailed error messages
+2. Verify the Chrome extension ID is correct
+3. Ensure Chrome has permission to execute the host script
+4. Restart Chrome after installation
+
+## Development
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run integration tests only
+npm run test:integration
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+### Building for Development
+
+```bash
+# Start in development mode
+npm run dev
+```
+
+## License
+
+[Add license information here]
