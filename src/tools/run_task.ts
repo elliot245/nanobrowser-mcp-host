@@ -44,7 +44,7 @@ export class RunTaskTool {
   public inputSchema = {
     task: z.string().describe('The task description to be completed by the agent'),
     context: z.string().optional().describe('Additional context for the task'),
-    timeout: z.number().optional().default(30000).describe('Timeout in milliseconds'),
+    timeout: z.number().optional().default(300000).describe('Timeout in milliseconds'),
   };
 
   /**
@@ -59,8 +59,8 @@ export class RunTaskTool {
       throw new Error('Task description is required');
     }
 
-    // Use the provided timeout or default to 30 seconds
-    const timeout = args.timeout || 30000;
+    // Use the provided timeout or default to 300 seconds
+    const timeout = args.timeout || 300000;
 
     const result = await this.messaging.rpcRequest(
       {
@@ -79,7 +79,7 @@ export class RunTaskTool {
       content: [
         {
           type: 'text',
-          text: `Task completed: ${result || 'No result provided'}`,
+          text: `Task completed: ${JSON.stringify(result) || 'No result provided'}`,
         },
       ],
     };

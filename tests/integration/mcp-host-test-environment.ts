@@ -116,6 +116,7 @@ export class McpHostTestEnvironment {
         ...process.env,
         LOG_LEVEL: 'DEBUG',
         PORT: this.port.toString(),
+        LOW_LEVEL_TOOLS_ENABLED: 'true'
       },
     });
 

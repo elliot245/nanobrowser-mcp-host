@@ -64,13 +64,20 @@ messaging.registerRpcMethod('ping', async (req: RpcRequest): Promise<RpcResponse
   };
 });
 
+const lowLevelToolsEnabled = process.env.LOW_LEVEL_TOOLS_ENABLED === 'true'
+
 // Register resources with the MCP server manager
-mcpServerManager.registerResource(new CurrentDomResource(messaging));
-mcpServerManager.registerResource(new CurrentStateResource(messaging));
-logger.info(`Registered resources with MCP server`);
+if (lowLevelToolsEnabled) {
+  mcpServerManager.registerResource(new CurrentDomResource(messaging));
+  mcpServerManager.registerResource(new CurrentStateResource(messaging));
+  logger.info(`Registered resources with MCP server`);
+}
 
 // Initialize tools with the messaging instance
-mcpServerManager.registerTool(new NavigateToTool(messaging));
+if (lowLevelToolsEnabled) {
+  mcpServerManager.registerTool(new NavigateToTool(messaging));
+}
+
 mcpServerManager.registerTool(new RunTaskTool(messaging));
 logger.info(`Registered tools with MCP server`);
 
@@ -87,6 +94,8 @@ mcpServerManager
   })
   .catch((error: Error) => {
     logger.error('Exception during MCP HTTP server auto-start:', error);
+
+    process.exit(0);
   });
 
 // Send initial ready message to let the extension know we're available
