@@ -69,7 +69,7 @@ describe('Run Task Tool', () => {
     expect(toolResp.content).toBeDefined();
     expect(toolResp.content.length).toBeGreaterThan(0);
     expect(toolResp.content[0].type).toBe('text');
-    expect(toolResp.content[0].text).toBe(`Task completed: ${taskResult}`);
+    expect(toolResp.content[0].text).toBe(`Task completed: "${taskResult}"`);
   });
 
   test('should throw error when task is not provided', async () => {
@@ -103,6 +103,6 @@ describe('Run Task Tool', () => {
       task: 'Test task',
     });
 
-    expect(toolResp.content[0].text).toBe('Task completed: Task completed');
+    expect(toolResp.content[0].text).toBe('Task completed: "Task completed"');
   });
 });

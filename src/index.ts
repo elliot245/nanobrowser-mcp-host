@@ -92,10 +92,14 @@ mcpServerManager
       logger.error('Failed to auto-start MCP HTTP server: Server already running');
     }
   })
-  .catch((error: Error) => {
-    logger.error('Exception during MCP HTTP server auto-start:', error);
+  .catch((error: Error & { code?: string }) => {
+    if (error.code === 'EADDRINUSE') {
+      logger.error(`Exception during MCP HTTP server auto-start: Port ${mcpServerPort} is already in use`);
+    } else {
+      logger.error('Exception during MCP HTTP server auto-start:', error);
+    }
 
-    process.exit(0);
+    process.exit(1); // Exit with error code to indicate failure
   });
 
 // Send initial ready message to let the extension know we're available

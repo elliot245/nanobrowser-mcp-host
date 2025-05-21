@@ -1,7 +1,18 @@
 /**
  * Run task tool
  *
- * This tool allows requesting the agent to complete a specified task.
+ * This tool allows requesting the agent to complete a specified task through the browser.
+ * It enables AI systems to perform complex operations in the browser environment such as:
+ * 
+ * - Web automation tasks (filling forms, clicking buttons, navigating between pages)
+ * - Information extraction from web pages
+ * - Multi-step browser interactions
+ * - Data processing from web content
+ * - Web scraping and content analysis
+ * - Testing and validating web applications
+ * 
+ * The tool acts as a bridge between the MCP host and the browser extension, allowing
+ * the AI to effectively operate within the browser context to complete user-requested tasks.
  */
 
 import { z } from 'zod';
@@ -23,7 +34,21 @@ export class RunTaskTool {
   /**
    * Tool description
    */
-  public description = 'Request the agent to complete a task';
+  public description = 'Request the agent to complete a task within the browser environment';
+
+  /**
+   * Tool capabilities explanation - provides detailed information about what this tool can do
+   */
+  public capabilities = [
+    'Execute web automation tasks (form filling, button clicking, etc.)',
+    'Extract information from web pages',
+    'Perform multi-step browser interactions',
+    'Process and analyze web content',
+    'Scrape web data with proper permissions',
+    'Test and validate web applications',
+    'Navigate complex web interfaces',
+    'Interact with dynamic web content'
+  ];
 
   /**
    * Private reference to the NativeMessaging instance
@@ -42,9 +67,9 @@ export class RunTaskTool {
    * Input schema for the tool
    */
   public inputSchema = {
-    task: z.string().describe('The task description to be completed by the agent'),
-    context: z.string().optional().describe('Additional context for the task'),
-    timeout: z.number().optional().default(300000).describe('Timeout in milliseconds'),
+    task: z.string().describe('The task description to be completed by the agent (e.g., "Fill out the login form", "Extract product information from the current page")'),
+    context: z.string().optional().describe('Additional context for the task, such as specific instructions, constraints, or information needed to complete the task successfully'),
+    timeout: z.number().optional().default(300000).describe('Timeout in milliseconds (default: 300000ms/5min) after which the task execution will be aborted if not completed'),
   };
 
   /**

@@ -183,6 +183,16 @@ export class McpServerManager {
           this.logger.info(`HTTP server listening on http://localhost:${this.config.port}`);
           resolve();
         });
+        
+        // Add error event handler to properly catch listening errors
+        this.httpServer.on('error', (error: Error & { code?: string }) => {
+          if (error.code === 'EADDRINUSE') {
+            this.logger.error(`Port ${this.config.port} is already in use`);
+          } else {
+            this.logger.error(`Error starting HTTP server: ${error.message}`);
+          }
+          reject(error);
+        });
       } catch (error) {
         reject(error);
       }
