@@ -54,10 +54,10 @@ This document is recommended for developers and integrators who want to understa
 2. **Build the project**:
    ```bash
    # Install dependencies
-   npm install
+   pnpm install
    
    # Build the project
-   npm run build
+   pnpm build
    ```
 
 3. **Run the installer script**:
@@ -160,20 +160,20 @@ If you encounter issues:
 
 ```bash
 # Run all tests
-npm test
+pnpm test
 
 # Run integration tests only
-npm run test:integration
+pnpm test:integration
 
 # Run tests in watch mode
-npm run test:watch
+pnpm test:watch
 ```
 
 ### Building for Development
 
 ```bash
 # Start in development mode
-npm run dev
+pnpm dev
 ```
 
 ## License
