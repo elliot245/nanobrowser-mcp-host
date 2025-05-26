@@ -1,5 +1,6 @@
 # Nanobrowser MCP Host
 
+
 A Chrome Native Messaging Host implementation for the Model Context Protocol (MCP), enabling secure communication between Chrome extensions and AI systems.
 
 ## Overview
@@ -10,11 +11,24 @@ Nanobrowser MCP Host provides a standardized interface for AI systems to interac
 - **Browser Tools**: Navigation, element interaction, and other browser operations
 - **Secure Communication**: Chrome Native Messaging for secure local communication
 
+
 The implementation follows a two-layer architecture:
 1. External interface via HTTP/MCP protocol for AI systems
 2. Internal interface via Chrome Native Messaging for browser communication
 
 ## Features
+
+
+## Capabilities & API Reference
+
+For a summary of the built-in tools and resources provided by this MCP Host, see:
+
+- [MCP Server Capabilities](./docs/mcp-server-capabilities.md):
+  - Supported tools (navigation, task automation, etc.)
+  - Exposed browser resources (current state, tabs, etc.)
+  - Input schemas and resource URIs
+
+This document is recommended for developers和 integrators who want to understand or extend the host's API surface.
 
 - **MCP Protocol Support**: Standardized interface following the Model Context Protocol
 - **Resource Exposure**: Browser DOM, state, and other information as MCP resources
