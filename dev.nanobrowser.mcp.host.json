@@ -1,5 +1,5 @@
 {
-  "name": "dev.nanobrowser.mcp.host",
+  "name": "ai.nanobrowser.mcp.host",
   "description": "Nanobrowser MCP Native Messaging Host",
   "path": "/home/yubing/.nanobrowser/bin/mcp-host.sh",
   "type": "stdio",

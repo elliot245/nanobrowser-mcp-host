@@ -104,7 +104,7 @@ If the installer script doesn't work for your environment:
 4. **Create a manifest file** in the appropriate Chrome Native Messaging directory:
    ```json
    {
-     "name": "dev.nanobrowser.mcp.host",
+     "name": "ai.nanobrowser.mcp.host",
      "description": "Nanobrowser MCP Native Messaging Host",
      "path": "/home/username/.nanobrowser/bin/mcp-host.sh",
      "type": "stdio",

@@ -28,7 +28,7 @@ error_exit() {
 }
 
 # Native messaging host name (must follow Chrome's naming rules)
-HOST_NAME="dev.nanobrowser.mcp.host"
+HOST_NAME="ai.nanobrowser.mcp.host"
 
 # Detect OS
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
