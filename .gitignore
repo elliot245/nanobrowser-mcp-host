@@ -25,3 +25,6 @@ chrome-extension/public/manifest.json
 .nanobrowser
 .vscode
 *.py
+
+# messaging config file
+ai.nanobrowser.mcp.host.json
