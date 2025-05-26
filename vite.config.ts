@@ -90,8 +90,6 @@ export default defineConfig({
         format: 'es',
         // Fix for circular dependencies in bundled modules
         manualChunks: undefined,
-        // Add source-mapping for better debugging
-        sourcemap: true,
         // Prevent minification for better debugging
         minifyInternalExports: false
       }

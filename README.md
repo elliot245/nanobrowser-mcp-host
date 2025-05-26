@@ -53,6 +53,9 @@ This document is recommended for developers and integrators who want to understa
 
 2. **Build the project**:
    ```bash
+   # Use the correct Node.js version
+   nvm use
+   
    # Install dependencies
    pnpm install
    
