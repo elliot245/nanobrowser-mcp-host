@@ -1,8 +1,8 @@
-import { NativeMessaging } from './messaging.js';
 import { createLogger } from './logger.js';
 import { McpServerManager } from './mcp-server.js';
+import { NativeMessaging } from './messaging.js';
+import { CurrentStateResource } from './resources/index.js';
 import { NavigateToTool, RunTaskTool } from './tools/index.js';
-import { CurrentDomResource, CurrentStateResource } from './resources/index.js';
 import { RpcRequest, RpcResponse } from './types.js';
 
 // Create a logger instance for the main module
@@ -68,7 +68,6 @@ const lowLevelToolsEnabled = process.env.LOW_LEVEL_TOOLS_ENABLED === 'true'
 
 // Register resources with the MCP server manager
 if (lowLevelToolsEnabled) {
-  mcpServerManager.registerResource(new CurrentDomResource(messaging));
   mcpServerManager.registerResource(new CurrentStateResource(messaging));
   logger.info(`Registered resources with MCP server`);
 }
