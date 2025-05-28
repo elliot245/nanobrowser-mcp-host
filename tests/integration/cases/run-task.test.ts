@@ -69,7 +69,14 @@ describe('Run Task Tool', () => {
     expect(toolResp.content).toBeDefined();
     expect(toolResp.content.length).toBeGreaterThan(0);
     expect(toolResp.content[0].type).toBe('text');
-    expect(toolResp.content[0].text).toBe(`Task completed: "${taskResult}"`);
+    // Verify the new markdown format
+    const responseText = toolResp.content[0].text;
+    expect(responseText).toContain('# Task Execution Result');
+    expect(responseText).toContain('**Status**: ✅ Success');
+    expect(responseText).toContain(`**Task**: ${testTask}`);
+    expect(responseText).toContain('**Execution Time**:');
+    expect(responseText).toContain('## Results');
+    expect(responseText).toContain(taskResult);
   });
 
   test('should throw error when task is not provided', async () => {
@@ -103,6 +110,13 @@ describe('Run Task Tool', () => {
       task: 'Test task',
     });
 
-    expect(toolResp.content[0].text).toBe('Task completed: "Task completed"');
+    // Verify the new markdown format
+    const responseText = toolResp.content[0].text;
+    expect(responseText).toContain('# Task Execution Result');
+    expect(responseText).toContain('**Status**: ✅ Success');
+    expect(responseText).toContain('**Task**: Test task');
+    expect(responseText).toContain('**Execution Time**:');
+    expect(responseText).toContain('## Results');
+    expect(responseText).toContain('Task completed');
   });
 });
