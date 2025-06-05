@@ -62,6 +62,72 @@ print_message "${BLUE}Platform detected: ${BOLD}$PLATFORM${NC}"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 print_message "${BLUE}Installation directory: ${BOLD}$SCRIPT_DIR${NC}"
 
+# Function to show help
+show_help() {
+  cat << EOF
+${BLUE}${BOLD}Nanobrowser MCP Native Messaging Host Installer${NC}
+
+${BOLD}USAGE:${NC}
+  ./install.sh [OPTIONS]
+
+${BOLD}OPTIONS:${NC}
+  --dev, -d     Enable development mode
+                • Runs directly from source dist/ directory
+                • No file copying - changes reflected immediately after rebuild
+                • Ideal for debugging and development
+
+  --help, -h    Show this help message and exit
+
+${BOLD}EXAMPLES:${NC}
+  ./install.sh                    # Production installation (default)
+  ./install.sh --dev              # Development installation
+  ./install.sh --help             # Show this help
+
+${BOLD}MODES:${NC}
+  ${BOLD}Production Mode (default):${NC}
+    • Copies files to ~/.nanobrowser/app/
+    • Stable deployment setup
+    • Requires reinstallation for updates
+
+  ${BOLD}Development Mode (--dev):${NC}
+    • Runs directly from source directory
+    • No file copying required
+    • Immediate reflection of changes after 'npm run build'
+    • Easier debugging and iteration
+
+${BOLD}REQUIREMENTS:${NC}
+  • Node.js installed
+  • Project built with 'npm run build'
+  • For dev mode: node_modules installed with 'npm install'
+
+${BOLD}SUPPORT:${NC}
+  • Platforms: macOS, Linux
+  • Browsers: Chrome, Chromium, Chrome Canary, Chrome Dev
+EOF
+}
+
+# Check command line arguments
+DEV_MODE=false
+case "$1" in
+  --help|-h)
+    show_help
+    exit 0
+    ;;
+  --dev|-d)
+    DEV_MODE=true
+    print_message "${YELLOW}${BOLD}Development mode enabled${NC}"
+    print_message "${YELLOW}Host will run directly from source directory for easier debugging${NC}"
+    ;;
+  "")
+    # No arguments - default production mode
+    ;;
+  *)
+    print_message "${RED}${BOLD}Unknown option: $1${NC}"
+    print_message "${YELLOW}Use --help for available options${NC}"
+    exit 1
+    ;;
+esac
+
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
   error_exit "Node.js is not installed. Please install Node.js and try again."
@@ -86,30 +152,63 @@ print_message "${BLUE}  - Log directory: ${BOLD}$LOGS_DIR${NC}"
 print_message "${BLUE}  - Binary directory: ${BOLD}$BIN_DIR${NC}"
 print_message "${BLUE}  - Application directory: ${BOLD}$APP_DIR${NC}"
 
-# Copy application files
-print_message "${BLUE}Copying application files...${NC}"
-if [ -d "$SCRIPT_DIR/dist" ]; then
-  cp -r "$SCRIPT_DIR/dist"/* "$APP_DIR/"
-  
-  # Copy node_modules for dependencies
-  print_message "${BLUE}Copying dependencies...${NC}"
-  if [ -d "$SCRIPT_DIR/node_modules" ]; then
-    cp -r "$SCRIPT_DIR/node_modules" "$APP_DIR/"
-    print_message "${GREEN}Dependencies copied successfully.${NC}"
-  else
-    print_message "${YELLOW}Warning: node_modules directory not found. Dependencies may be missing.${NC}"
+# Copy application files (skip in development mode)
+if [ "$DEV_MODE" = true ]; then
+  print_message "${YELLOW}Development mode: Skipping file copy, will run directly from source${NC}"
+  if [ ! -d "$SCRIPT_DIR/dist" ]; then
+    error_exit "Build directory 'dist' not found. Please build the project first with 'npm run build'."
   fi
-  
-  print_message "${GREEN}Application files copied successfully.${NC}"
+  if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
+    error_exit "node_modules directory not found. Please run 'npm install' first."
+  fi
 else
-  error_exit "Build directory 'dist' not found. Please build the project first with 'npm run build'."
+  print_message "${BLUE}Copying application files...${NC}"
+  if [ -d "$SCRIPT_DIR/dist" ]; then
+    cp -r "$SCRIPT_DIR/dist"/* "$APP_DIR/"
+    
+    # Copy node_modules for dependencies (preserving symlinks for pnpm compatibility)
+    print_message "${BLUE}Copying dependencies...${NC}"
+    if [ -d "$SCRIPT_DIR/node_modules" ]; then
+      cp -a "$SCRIPT_DIR/node_modules" "$APP_DIR/"
+      print_message "${GREEN}Dependencies copied successfully (symlinks preserved).${NC}"
+    else
+      print_message "${YELLOW}Warning: node_modules directory not found. Dependencies may be missing.${NC}"
+    fi
+    
+    print_message "${GREEN}Application files copied successfully.${NC}"
+  else
+    error_exit "Build directory 'dist' not found. Please build the project first with 'npm run build'."
+  fi
 fi
 
 # Create the host script
 HOST_SCRIPT="$BIN_DIR/mcp-host.sh"
 print_message "${BLUE}Creating host script: ${BOLD}$HOST_SCRIPT${NC}"
 
-cat > "$HOST_SCRIPT" << EOF
+if [ "$DEV_MODE" = true ]; then
+  # Development mode: run directly from dist directory
+  cat > "$HOST_SCRIPT" << EOF
+#!/bin/bash
+
+# Set log level (can be overridden by install.sh)
+export LOG_LEVEL=INFO
+
+# Set log directory and file
+export LOG_DIR="$HOME/.nanobrowser/logs"
+export LOG_FILE="mcp-host.log"
+
+# Create logs directory if it doesn't exist
+mkdir -p "\$LOG_DIR"
+
+# Development mode: run directly from source dist directory
+cd "$SCRIPT_DIR/dist"
+
+# Run MCP host - logs are handled internally by the Logger class
+node index.js
+EOF
+else
+  # Production mode: run from installed location
+  cat > "$HOST_SCRIPT" << EOF
 #!/bin/bash
 
 # Set log level (can be overridden by install.sh)
@@ -128,6 +227,7 @@ cd "$APP_DIR"
 # Run MCP host - logs are handled internally by the Logger class
 node index.js
 EOF
+fi
 
 chmod +x "$HOST_SCRIPT"
 
@@ -225,3 +325,16 @@ print_message "${YELLOW}If you still receive 'Native host not found' errors, ple
 print_message "${YELLOW}1. The extension ID is correct ($EXTENSION_ID)${NC}"
 print_message "${YELLOW}2. The Chrome process can access $HOST_SCRIPT${NC}"
 print_message "${YELLOW}3. Check the logs at $HOME/.nanobrowser/logs/mcp-host.log for any errors${NC}"
+
+if [ "$DEV_MODE" = true ]; then
+  print_message "${BLUE}${BOLD}Development Mode Notes:${NC}"
+  print_message "${BLUE}• Host runs directly from $SCRIPT_DIR/dist${NC}"
+  print_message "${BLUE}• No file copying - changes to source are reflected immediately after rebuild${NC}"
+  print_message "${BLUE}• To rebuild: npm run build${NC}"
+  print_message "${BLUE}• To switch to production mode: ./install.sh (without --dev flag)${NC}"
+else
+  print_message "${BLUE}${BOLD}Production Mode Notes:${NC}"
+  print_message "${BLUE}• Host runs from copied files in $APP_DIR${NC}"
+  print_message "${BLUE}• To update: rebuild and run ./install.sh again${NC}"
+  print_message "${BLUE}• For development mode: ./install.sh --dev${NC}"
+fi
