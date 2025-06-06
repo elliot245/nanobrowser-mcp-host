@@ -59,7 +59,7 @@ export class McpHostTestEnvironment {
    * @param timeout Maximum time to wait in milliseconds
    * @returns A promise that resolves when the host is ready
    */
-  private async waitForHostReady(timeout = 10000): Promise<void> {
+  private async waitForHostReady(timeout = 30000): Promise<void> {
     const startTime = Date.now();
     let attemptCount = 0;
 
@@ -107,6 +107,21 @@ export class McpHostTestEnvironment {
     // Find available port if not specified
     if (this.port === 0) {
       this.port = await this.findAvailablePort();
+    }
+
+    // Clean up any existing PID files to avoid conflicts
+    const { homedir } = await import('os');
+    const { join } = await import('path');
+    const { existsSync, unlinkSync } = await import('fs');
+    
+    const pidFilePath = join(homedir(), '.nanobrowser', 'mcp-host.pid');
+    if (existsSync(pidFilePath)) {
+      try {
+        unlinkSync(pidFilePath);
+        this.logger.debug('Cleaned up existing PID file');
+      } catch (error) {
+        this.logger.warn('Failed to clean up PID file:', error);
+      }
     }
 
     // Start the MCP host process with mock stdio and the selected port

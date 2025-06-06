@@ -4,6 +4,9 @@ import { NativeMessaging } from './messaging.js';
 import { CurrentStateResource } from './resources/index.js';
 import { NavigateToTool, RunTaskTool } from './tools/index.js';
 import { RpcRequest, RpcResponse } from './types.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 // Create a logger instance for the main module
 const logger = createLogger('main');
@@ -14,6 +17,86 @@ const HOST_INFO = {
   version: '0.1.0',
   runMode: process.env.RUN_MODE || 'stdio',
 };
+
+// PID file management
+const nanobrowserDir = path.join(os.homedir(), '.nanobrowser');
+const pidFilePath = path.join(nanobrowserDir, 'mcp-host.pid');
+
+/**
+ * Create PID file with current process ID
+ */
+function createPidFile(): void {
+  try {
+    // Ensure the directory exists
+    if (!fs.existsSync(nanobrowserDir)) {
+      fs.mkdirSync(nanobrowserDir, { recursive: true });
+    }
+
+    // Write current process PID to file
+    fs.writeFileSync(pidFilePath, process.pid.toString(), 'utf8');
+    logger.info(`Created PID file: ${pidFilePath} with PID: ${process.pid}`);
+  } catch (error) {
+    logger.error('Failed to create PID file:', error);
+  }
+}
+
+/**
+ * Remove PID file
+ */
+function removePidFile(): void {
+  try {
+    if (fs.existsSync(pidFilePath)) {
+      fs.unlinkSync(pidFilePath);
+      logger.info(`Removed PID file: ${pidFilePath}`);
+    }
+  } catch (error) {
+    logger.error('Failed to remove PID file:', error);
+  }
+}
+
+/**
+ * Check if another instance is already running
+ */
+function checkExistingInstance(): boolean {
+  if (!fs.existsSync(pidFilePath)) {
+    return false;
+  }
+
+  try {
+    const existingPid = parseInt(fs.readFileSync(pidFilePath, 'utf8').trim(), 10);
+    
+    if (isNaN(existingPid)) {
+      logger.warn('Invalid PID in PID file, removing stale file');
+      removePidFile();
+      return false;
+    }
+
+    // Check if process with this PID is still running
+    try {
+      process.kill(existingPid, 0); // Signal 0 checks if process exists without killing it
+      logger.warn(`Another MCP Host instance is already running with PID: ${existingPid}`);
+      return true;
+    } catch (error) {
+      // Process doesn't exist, remove stale PID file
+      logger.info(`Removing stale PID file for non-existent process ${existingPid}`);
+      removePidFile();
+      return false;
+    }
+  } catch (error) {
+    logger.error('Error checking existing instance:', error);
+    removePidFile();
+    return false;
+  }
+}
+
+// Check for existing instance before starting
+if (checkExistingInstance()) {
+  logger.error('Another MCP Host instance is already running. Exiting.');
+  process.exit(1);
+}
+
+// Create PID file for this instance
+createPidFile();
 
 // Initialize status tracking
 const hostStatus = {
@@ -119,8 +202,12 @@ process.on('SIGINT', async () => {
   // First shut down the MCP server
   if (mcpServerManager.isServerRunning()) {
     logger.info('Shutting down MCP server before exit');
-    await mcpServerManager.shutdown();
+    mcpServerManager.shutdown();
+    logger.info('Shutting down MCP server before exit ok');
   }
+
+  // Clean up PID file
+  removePidFile();
 
   process.exit(0);
 });
@@ -134,10 +221,18 @@ process.on('SIGTERM', async () => {
     await mcpServerManager.shutdown();
   }
 
+  // Clean up PID file
+  removePidFile();
+
   process.exit(0);
 });
 
-// Error handling for uncaught exceptions
+// Handle process exit to clean up PID file
+process.on('exit', () => {
+  removePidFile();
+});
+
+// Handle uncaught exceptions - clean up before exit
 process.on('uncaughtException', error => {
   logger.error('Uncaught exception:', error);
   messaging.sendMessage({
@@ -145,6 +240,19 @@ process.on('uncaughtException', error => {
     error: error.message,
     stack: error.stack,
   });
+  
+  // Clean up PID file before exit
+  removePidFile();
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled promise rejection at:', promise, 'reason:', reason);
+  
+  // Clean up PID file before exit
+  removePidFile();
+  process.exit(1);
 });
 
 logger.info('MCP Host started successfully');

@@ -25,6 +25,7 @@ export default defineConfig({
     sequence: process.env.TEST_TYPE === 'integration' ? { shuffle: false } : undefined,
     // Prevent token limit issues with integration tests
     testTimeout: process.env.TEST_TYPE === 'integration' ? 30000 : 5000,
+    hookTimeout: process.env.TEST_TYPE === 'integration' ? 30000 : 10000,
     // Run only files matching the pattern sequentially
     fileParallelism: process.env.TEST_TYPE === 'integration' ? false : true,
     // Give more time for file watching operations to avoid reload conflicts

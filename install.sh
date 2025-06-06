@@ -27,6 +27,335 @@ error_exit() {
   exit 1
 }
 
+# Function to find MCP Host processes
+find_mcp_processes() {
+  local pids=()
+  
+  # Method 1: Check PID file (most reliable method)
+  local pid_file="$HOME/.nanobrowser/mcp-host.pid"
+  if [ -f "$pid_file" ]; then
+    local pid_from_file=$(cat "$pid_file" 2>/dev/null | tr -d '\n' | tr -d ' ')
+    if [ -n "$pid_from_file" ] && [[ "$pid_from_file" =~ ^[0-9]+$ ]]; then
+      # Verify the process is actually running
+      if kill -0 "$pid_from_file" 2>/dev/null; then
+        pids="$pids $pid_from_file"
+      fi
+    fi
+  fi
+  
+  # Method 2: Find by port usage (port 7890 is default for MCP Host)
+  if command -v lsof &> /dev/null; then
+    local port_pids=$(lsof -ti:7890 2>/dev/null || true)
+    pids="$pids $port_pids"
+  fi
+  
+  # Remove duplicates and empty entries, then return
+  echo $pids | tr ' ' '\n' | grep -v '^$' | sort -u | tr '\n' ' '
+}
+
+# Function to check if a process is healthy (responding)
+check_process_health() {
+  local pid=$1
+  
+  # Check if process exists
+  if ! kill -0 "$pid" 2>/dev/null; then
+    return 2  # Process doesn't exist
+  fi
+  
+  # Try to check if MCP Host is responding (if curl is available)
+  if command -v curl &> /dev/null; then
+    if curl -s --max-time 2 --connect-timeout 1 http://127.0.0.1:7890/health >/dev/null 2>&1; then
+      return 0  # Process is healthy
+    fi
+  fi
+  
+  # Process exists but might not be responding
+  return 1  # Potentially zombie process
+}
+
+# Function to terminate a process gracefully
+terminate_process_gracefully() {
+  local pid=$1
+  local process_name=$(ps -p $pid -o comm= 2>/dev/null || echo "unknown")
+  
+  print_message "${BLUE}Terminating $process_name (PID: $pid)...${NC}"
+  
+  # Step 1: Try SIGTERM (graceful termination)
+  if kill -TERM "$pid" 2>/dev/null; then
+    # Wait up to 5 seconds for graceful termination
+    for i in {1..5}; do
+      if ! kill -0 "$pid" 2>/dev/null; then
+        print_message "${GREEN}Process terminated gracefully${NC}"
+        return 0
+      fi
+      sleep 1
+    done
+  fi
+  
+  # Step 2: Force termination with SIGKILL
+  print_message "${YELLOW}Process not responding, force terminating...${NC}"
+  if kill -KILL "$pid" 2>/dev/null; then
+    sleep 1
+    if ! kill -0 "$pid" 2>/dev/null; then
+      print_message "${GREEN}Process force terminated${NC}"
+      return 0
+    fi
+  fi
+  
+  print_message "${RED}Warning: Failed to terminate process $pid${NC}"
+  return 1
+}
+
+# Function to cleanup zombie processes
+cleanup_zombie_processes() {
+  local force_mode=${1:-false}
+  local mcp_pids=$(find_mcp_processes)
+  
+  if [ -z "$mcp_pids" ]; then
+    print_message "${GREEN}No existing MCP Host processes found${NC}"
+    return 0
+  fi
+  
+  print_message "${YELLOW}Found existing MCP Host processes: $mcp_pids${NC}"
+  
+  for pid in $mcp_pids; do
+    # Skip empty PIDs
+    [ -z "$pid" ] && continue
+    
+    case $(check_process_health $pid) in
+      0) 
+        print_message "${GREEN}Found healthy MCP Host process ($pid)${NC}"
+        if [ "$force_mode" = true ]; then
+          terminate_process_gracefully $pid
+        else
+          print_message "${YELLOW}A healthy MCP Host is already running.${NC}"
+          read -p "Terminate existing process to continue installation? (y/n): " response
+          if [[ "$response" =~ ^[Yy]$ ]]; then
+            terminate_process_gracefully $pid
+          else
+            print_message "${BLUE}Installation aborted by user. Options:${NC}"
+            print_message "${BLUE}1. Manually stop the MCP Host process${NC}"
+            print_message "${BLUE}2. Run with --force to automatically terminate processes${NC}"
+            print_message "${BLUE}3. Use --cleanup to only clean up processes${NC}"
+            exit 1
+          fi
+        fi
+        ;;
+      1)
+        print_message "${YELLOW}Found zombie MCP Host process ($pid), cleaning up...${NC}"
+        terminate_process_gracefully $pid
+        ;;
+      2)
+        # Process doesn't exist anymore, skip
+        ;;
+    esac
+  done
+}
+
+# Function to check and cleanup orphaned ports
+cleanup_orphaned_ports() {
+  if command -v lsof &> /dev/null; then
+    local port_processes=$(lsof -ti:7890 2>/dev/null || true)
+    if [ -n "$port_processes" ]; then
+      print_message "${YELLOW}Port 7890 is still in use by processes: $port_processes${NC}"
+      # These should have been cleaned up by process cleanup, but just in case
+      for pid in $port_processes; do
+        if kill -0 "$pid" 2>/dev/null; then
+          print_message "${YELLOW}Cleaning up process $pid using port 7890${NC}"
+          terminate_process_gracefully $pid
+        fi
+      done
+    fi
+  fi
+}
+
+# Function to cleanup temporary files
+cleanup_temp_files() {
+  local temp_dirs=(
+    "/tmp/mcp-host*"
+    "/tmp/nanobrowser*"
+    "$HOME/.nanobrowser/tmp"
+  )
+  
+  for pattern in "${temp_dirs[@]}"; do
+    if ls $pattern >/dev/null 2>&1; then
+      print_message "${BLUE}Cleaning up temporary files: $pattern${NC}"
+      rm -rf $pattern
+    fi
+  done
+}
+
+# Function for comprehensive pre-installation cleanup
+pre_install_cleanup() {
+  local force_mode=${1:-false}
+  
+  print_message "${BLUE}${BOLD}Performing pre-installation cleanup...${NC}"
+  
+  # Step 1: Check and cleanup processes
+  cleanup_zombie_processes $force_mode
+  
+  # Step 2: Check and cleanup orphaned ports
+  cleanup_orphaned_ports
+  
+  # Step 3: Cleanup temporary files
+  cleanup_temp_files
+  
+  print_message "${GREEN}Pre-installation cleanup completed${NC}"
+}
+
+# Function to verify installation success
+verify_installation() {
+  local host_script="$1"
+  local manifest_path="$2"
+  local extension_id="$3"
+  
+  print_message "${BLUE}${BOLD}Verifying installation...${NC}"
+  
+  # Check 1: Host script exists and is executable
+  if [ ! -f "$host_script" ]; then
+    print_message "${RED}❌ Host script not found: $host_script${NC}"
+    return 1
+  fi
+  
+  if [ ! -x "$host_script" ]; then
+    print_message "${RED}❌ Host script is not executable: $host_script${NC}"
+    return 1
+  fi
+  print_message "${GREEN}✅ Host script exists and is executable${NC}"
+  
+  # Check 2: Manifest files exist
+  if [ ! -f "$manifest_path" ]; then
+    print_message "${RED}❌ Manifest file not found: $manifest_path${NC}"
+    return 1
+  fi
+  print_message "${GREEN}✅ Manifest file exists${NC}"
+  
+  # Check 3: Manifest content is valid JSON
+  if ! python3 -m json.tool "$manifest_path" >/dev/null 2>&1 && ! node -e "JSON.parse(require('fs').readFileSync('$manifest_path', 'utf8'))" >/dev/null 2>&1; then
+    print_message "${RED}❌ Manifest file contains invalid JSON${NC}"
+    return 1
+  fi
+  print_message "${GREEN}✅ Manifest file contains valid JSON${NC}"
+  
+  # Check 4: Extension ID in manifest matches provided ID
+  if command -v node &> /dev/null; then
+    local manifest_extension_id=$(node -e "
+      const fs = require('fs');
+      const manifest = JSON.parse(fs.readFileSync('$manifest_path', 'utf8'));
+      const origins = manifest.allowed_origins || [];
+      const match = origins[0] && origins[0].match(/chrome-extension:\/\/([a-z]{32})\//);
+      console.log(match ? match[1] : '');
+    " 2>/dev/null || echo "")
+    
+    if [ "$manifest_extension_id" != "$extension_id" ]; then
+      print_message "${RED}❌ Extension ID mismatch in manifest${NC}"
+      print_message "${RED}   Expected: $extension_id${NC}"
+      print_message "${RED}   Found: $manifest_extension_id${NC}"
+      return 1
+    fi
+    print_message "${GREEN}✅ Extension ID matches in manifest${NC}"
+  fi
+  
+  print_message "${GREEN}${BOLD}Installation verification completed successfully!${NC}"
+  return 0
+}
+
+# Function for diagnostic mode
+diagnose_system() {
+  print_message "${BLUE}${BOLD}=== MCP Host System Diagnosis ===${NC}"
+  
+  # System information
+  print_message "${BLUE}System Information:${NC}"
+  print_message "  OS: $OSTYPE"
+  print_message "  Platform: $PLATFORM"
+  print_message "  Shell: $SHELL"
+  print_message "  User: $USER"
+  print_message "  Home: $HOME"
+  
+  # Process check
+  print_message "${BLUE}Process Check:${NC}"
+  
+  # Check PID file first
+  local pid_file="$HOME/.nanobrowser/mcp-host.pid"
+  if [ -f "$pid_file" ]; then
+    local pid_from_file=$(cat "$pid_file" 2>/dev/null | tr -d '\n' | tr -d ' ')
+    print_message "  PID file exists: $pid_file"
+    print_message "    PID from file: $pid_from_file"
+    if [ -n "$pid_from_file" ] && [[ "$pid_from_file" =~ ^[0-9]+$ ]]; then
+      if kill -0 "$pid_from_file" 2>/dev/null; then
+        print_message "    Process $pid_from_file is running"
+      else
+        print_message "    Process $pid_from_file is NOT running (stale PID file)"
+      fi
+    else
+      print_message "    Invalid PID in file"
+    fi
+  else
+    print_message "  No PID file found"
+  fi
+  
+  local mcp_pids=$(find_mcp_processes)
+  if [ -n "$mcp_pids" ]; then
+    print_message "  Found MCP processes: $mcp_pids"
+    for pid in $mcp_pids; do
+      [ -z "$pid" ] && continue
+      local health=$(check_process_health $pid && echo "healthy" || echo "unhealthy")
+      local cmd=$(ps -p $pid -o args= 2>/dev/null || echo "unknown")
+      print_message "    PID $pid: $health - $cmd"
+    done
+  else
+    print_message "  No MCP Host processes found"
+  fi
+  
+  # Port check
+  print_message "${BLUE}Port Check:${NC}"
+  if command -v lsof &> /dev/null; then
+    local port_usage=$(lsof -i:7890 2>/dev/null || echo "")
+    if [ -n "$port_usage" ]; then
+      print_message "  Port 7890 usage:"
+      echo "$port_usage" | while read line; do
+        print_message "    $line"
+      done
+    else
+      print_message "  Port 7890 is available"
+    fi
+  else
+    print_message "  lsof not available, cannot check port usage"
+  fi
+  
+  # File system check
+  print_message "${BLUE}Installation Files Check:${NC}"
+  local nanobrowser_dir="$HOME/.nanobrowser"
+  if [ -d "$nanobrowser_dir" ]; then
+    print_message "  Nanobrowser directory exists: $nanobrowser_dir"
+    ls -la "$nanobrowser_dir" | while read line; do
+      print_message "    $line"
+    done
+  else
+    print_message "  Nanobrowser directory not found"
+  fi
+  
+  # Chrome integration check
+  print_message "${BLUE}Chrome Integration Check:${NC}"
+  local manifest_dirs=("$CHROME_NM_DIR" "$CHROME_CANARY_NM_DIR" "$CHROME_DEV_NM_DIR" "$CHROMIUM_NM_DIR")
+  for dir in "${manifest_dirs[@]}"; do
+    if [ -d "$dir" ]; then
+      print_message "  $dir exists"
+      if ls "$dir"/*.json >/dev/null 2>&1; then
+        ls "$dir"/*.json | while read manifest; do
+          print_message "    Found manifest: $(basename "$manifest")"
+        done
+      else
+        print_message "    No manifest files found"
+      fi
+    else
+      print_message "  $dir does not exist"
+    fi
+  done
+  
+  print_message "${GREEN}${BOLD}Diagnosis completed${NC}"
+}
+
 # Native messaging host name (must follow Chrome's naming rules)
 HOST_NAME="ai.nanobrowser.mcp.host"
 
@@ -71,16 +400,34 @@ ${BOLD}USAGE:${NC}
   ./install.sh [OPTIONS]
 
 ${BOLD}OPTIONS:${NC}
-  --dev, -d     Enable development mode
-                • Runs directly from source dist/ directory
-                • No file copying - changes reflected immediately after rebuild
-                • Ideal for debugging and development
+  --dev, -d         Enable development mode
+                    • Runs directly from source dist/ directory
+                    • No file copying - changes reflected immediately after rebuild
+                    • Ideal for debugging and development
 
-  --help, -h    Show this help message and exit
+  --force, -f       Force mode - automatically terminate existing processes
+                    • Skips user prompts for process termination
+                    • Useful for automated installations
+
+  --cleanup, -c     Cleanup mode - only clean up processes and files
+                    • Terminates existing MCP Host processes
+                    • Cleans up temporary files and orphaned ports
+                    • Does not perform installation
+
+  --diagnose        Diagnostic mode - check system status
+                    • Shows detailed system information
+                    • Lists running processes and port usage
+                    • Checks installation files and Chrome integration
+                    • Useful for troubleshooting
+
+  --help, -h        Show this help message and exit
 
 ${BOLD}EXAMPLES:${NC}
   ./install.sh                    # Production installation (default)
   ./install.sh --dev              # Development installation
+  ./install.sh --force            # Force installation (auto-terminate processes)
+  ./install.sh --cleanup          # Clean up existing processes only
+  ./install.sh --diagnose         # Show system diagnostic information
   ./install.sh --help             # Show this help
 
 ${BOLD}MODES:${NC}
@@ -108,6 +455,10 @@ EOF
 
 # Check command line arguments
 DEV_MODE=false
+FORCE_MODE=false
+CLEANUP_ONLY=false
+DIAGNOSE_MODE=false
+
 case "$1" in
   --help|-h)
     show_help
@@ -117,6 +468,21 @@ case "$1" in
     DEV_MODE=true
     print_message "${YELLOW}${BOLD}Development mode enabled${NC}"
     print_message "${YELLOW}Host will run directly from source directory for easier debugging${NC}"
+    ;;
+  --force|-f)
+    FORCE_MODE=true
+    print_message "${YELLOW}${BOLD}Force mode enabled${NC}"
+    print_message "${YELLOW}Will automatically terminate existing processes${NC}"
+    ;;
+  --cleanup|-c)
+    CLEANUP_ONLY=true
+    print_message "${YELLOW}${BOLD}Cleanup mode enabled${NC}"
+    print_message "${YELLOW}Will clean up processes and files only (no installation)${NC}"
+    ;;
+  --diagnose)
+    DIAGNOSE_MODE=true
+    print_message "${BLUE}${BOLD}Diagnostic mode enabled${NC}"
+    print_message "${BLUE}Will show detailed system information${NC}"
     ;;
   "")
     # No arguments - default production mode
@@ -128,10 +494,37 @@ case "$1" in
     ;;
 esac
 
+# Handle special modes first
+if [ "$DIAGNOSE_MODE" = true ]; then
+  diagnose_system
+  exit 0
+fi
+
+if [ "$CLEANUP_ONLY" = true ]; then
+  print_message "${BLUE}${BOLD}=== MCP Host Cleanup Mode ===${NC}"
+  
+  if [ "$FORCE_MODE" = true ]; then
+    print_message "${YELLOW}Force mode: Will terminate all MCP Host processes${NC}"
+    cleanup_zombie_processes true
+  else
+    print_message "${BLUE}Interactive cleanup mode${NC}"
+    cleanup_zombie_processes false
+  fi
+  
+  cleanup_orphaned_ports
+  cleanup_temp_files
+  
+  print_message "${GREEN}${BOLD}Cleanup completed${NC}"
+  exit 0
+fi
+
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
   error_exit "Node.js is not installed. Please install Node.js and try again."
 fi
+
+# Perform pre-installation cleanup
+pre_install_cleanup $FORCE_MODE
 
 # Skip build since we've already built it
 print_message "${GREEN}Using existing build for Nanobrowser MCP Native Messaging Host...${NC}"
@@ -307,8 +700,8 @@ cp "$MANIFEST_PATH" "$CHROME_CANARY_NM_DIR/$MANIFEST_FILENAME"
 cp "$MANIFEST_PATH" "$CHROME_DEV_NM_DIR/$MANIFEST_FILENAME"
 cp "$MANIFEST_PATH" "$CHROMIUM_NM_DIR/$MANIFEST_FILENAME"
 
-# Verify installation
-if [ -f "$CHROME_NM_DIR/$MANIFEST_FILENAME" ]; then
+# Perform comprehensive installation verification
+if verify_installation "$HOST_SCRIPT" "$MANIFEST_PATH" "$EXTENSION_ID"; then
   print_message "${GREEN}${BOLD}Nanobrowser MCP Native Messaging Host has been installed successfully!${NC}"
   print_message "${GREEN}Host path: ${BOLD}$HOST_SCRIPT${NC}"
   print_message "${GREEN}${BOLD}Manifest installed in:${NC}"
@@ -317,7 +710,7 @@ if [ -f "$CHROME_NM_DIR/$MANIFEST_FILENAME" ]; then
   print_message "${GREEN}  - $CHROME_DEV_NM_DIR${NC}"
   print_message "${GREEN}  - $CHROMIUM_NM_DIR${NC}"
 else
-  error_exit "Failed to install the Native Messaging Host manifest."
+  error_exit "Installation verification failed. Please check the errors above and try again."
 fi
 
 print_message "${YELLOW}${BOLD}Important:${NC} If you are using Chrome, you may need to restart it for the changes to take effect."
