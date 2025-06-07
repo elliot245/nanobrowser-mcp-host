@@ -139,7 +139,7 @@ If the installer script doesn't work for your environment:
 The host can be configured through environment variables:
 
 - `LOG_LEVEL`: Set logging verbosity (ERROR, WARN, INFO, DEBUG)
-- `PORT`: HTTP server port (default: 7890)
+- `PORT`: HTTP server port (default: 9666)
 
 ### Log Files
 

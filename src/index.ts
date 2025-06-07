@@ -1,12 +1,12 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { createLogger } from './logger.js';
 import { McpServerManager } from './mcp-server.js';
 import { NativeMessaging } from './messaging.js';
 import { CurrentStateResource } from './resources/index.js';
 import { NavigateToTool, RunTaskTool } from './tools/index.js';
 import { RpcRequest, RpcResponse } from './types.js';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 
 // Create a logger instance for the main module
 const logger = createLogger('main');
@@ -109,7 +109,7 @@ const hostStatus = {
 logger.info(`Starting MCP Host in ${hostStatus.runMode} mode`);
 
 // Auto-start port (use PORT env var or default to 3000)
-const mcpServerPort = process.env.PORT ? parseInt(process.env.PORT, 10) : 7890;
+const mcpServerPort = process.env.PORT ? parseInt(process.env.PORT, 10) : 9666;
 const mcpServerManager = new McpServerManager({
   port: mcpServerPort,
   logLevel: 'info',

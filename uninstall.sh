@@ -71,9 +71,9 @@ find_mcp_processes() {
     fi
   fi
   
-  # Method 2: Find by port usage (port 7890 is default for MCP Host)
+  # Method 2: Find by port usage (port 9666 is default for MCP Host)
   if command -v lsof &> /dev/null; then
-    local port_pids=$(lsof -ti:7890 2>/dev/null || true)
+    local port_pids=$(lsof -ti:9666 2>/dev/null || true)
     pids="$pids $port_pids"
   fi
   

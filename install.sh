@@ -43,9 +43,9 @@ find_mcp_processes() {
     fi
   fi
   
-  # Method 2: Find by port usage (port 7890 is default for MCP Host)
+  # Method 2: Find by port usage (port 9666 is default for MCP Host)
   if command -v lsof &> /dev/null; then
-    local port_pids=$(lsof -ti:7890 2>/dev/null || true)
+    local port_pids=$(lsof -ti:9666 2>/dev/null || true)
     pids="$pids $port_pids"
   fi
   
@@ -64,7 +64,7 @@ check_process_health() {
   
   # Try to check if MCP Host is responding (if curl is available)
   if command -v curl &> /dev/null; then
-    if curl -s --max-time 2 --connect-timeout 1 http://127.0.0.1:7890/health >/dev/null 2>&1; then
+    if curl -s --max-time 2 --connect-timeout 1 http://127.0.0.1:9666/health >/dev/null 2>&1; then
       return 0  # Process is healthy
     fi
   fi
@@ -155,13 +155,13 @@ cleanup_zombie_processes() {
 # Function to check and cleanup orphaned ports
 cleanup_orphaned_ports() {
   if command -v lsof &> /dev/null; then
-    local port_processes=$(lsof -ti:7890 2>/dev/null || true)
+    local port_processes=$(lsof -ti:9666 2>/dev/null || true)
     if [ -n "$port_processes" ]; then
-      print_message "${YELLOW}Port 7890 is still in use by processes: $port_processes${NC}"
+      print_message "${YELLOW}Port 9666 is still in use by processes: $port_processes${NC}"
       # These should have been cleaned up by process cleanup, but just in case
       for pid in $port_processes; do
         if kill -0 "$pid" 2>/dev/null; then
-          print_message "${YELLOW}Cleaning up process $pid using port 7890${NC}"
+          print_message "${YELLOW}Cleaning up process $pid using port 9666${NC}"
           terminate_process_gracefully $pid
         fi
       done
@@ -310,14 +310,14 @@ diagnose_system() {
   # Port check
   print_message "${BLUE}Port Check:${NC}"
   if command -v lsof &> /dev/null; then
-    local port_usage=$(lsof -i:7890 2>/dev/null || echo "")
+    local port_usage=$(lsof -i:9666 2>/dev/null || echo "")
     if [ -n "$port_usage" ]; then
-      print_message "  Port 7890 usage:"
+      print_message "  Port 9666 usage:"
       echo "$port_usage" | while read line; do
         print_message "    $line"
       done
     else
-      print_message "  Port 7890 is available"
+      print_message "  Port 9666 is available"
     fi
   else
     print_message "  lsof not available, cannot check port usage"
