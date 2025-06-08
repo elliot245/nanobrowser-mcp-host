@@ -149,6 +149,12 @@ done
 print_message "${BLUE}Removing all Nanobrowser files...${NC}"
 
 if [ -d "$NANOBROWSER_DIR" ]; then
+  # List what we're removing for transparency
+  print_message "${BLUE}Removing:${NC}"
+  find "$NANOBROWSER_DIR" -type f | while read file; do
+    print_message "${BLUE}  - $file${NC}"
+  done
+  
   rm -rf "$NANOBROWSER_DIR"
   print_message "${GREEN}Removed directory: $NANOBROWSER_DIR${NC}"
 fi

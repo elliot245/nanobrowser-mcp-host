@@ -1,7 +1,7 @@
 import { Readable, Writable } from 'stream';
-import { createLogger } from './logger.js';
 import { v4 as uuidv4 } from 'uuid';
-import { RpcRequest, RpcResponse, RpcRequestOptions, RpcHandler, MessageHandler } from './types.js';
+import { createLogger } from './logger.js';
+import { MessageHandler, RpcHandler, RpcRequest, RpcRequestOptions, RpcResponse } from './types.js';
 
 export interface Message {
   type: string;
@@ -19,6 +19,7 @@ export class NativeMessaging {
     string,
     { resolve: (value: any) => void; reject: (reason?: any) => void; timeoutId: NodeJS.Timeout }
   >();
+  private onConnectionClosedCallback?: () => void;
 
   constructor(stdin: Readable = process.stdin, stdout: Writable = process.stdout) {
     this.stdin = stdin;
@@ -39,7 +40,8 @@ export class NativeMessaging {
     });
 
     this.stdin.on('end', () => {
-      this.logger.info('Native messaging host: stdin ended');
+      this.logger.info('Native messaging host: stdin ended - Chrome connection closed');
+      this.handleConnectionClosed();
     });
   }
 
@@ -192,5 +194,25 @@ export class NativeMessaging {
   public registerRpcMethod(method: string, handler: RpcHandler): void {
     this.logger.debug(`Registering RPC handler for method: ${method}`);
     this.rpcMethodHandlers.set(method, handler);
+  }
+
+  public onConnectionClosed(callback: () => void): void {
+    this.onConnectionClosedCallback = callback;
+  }
+
+  private handleConnectionClosed(): void {
+    this.logger.info('Handling connection closed - cleaning up pending requests');
+    
+    // Clean up all pending RPC requests
+    for (const [id, { reject, timeoutId }] of this.pendingRequests) {
+      clearTimeout(timeoutId);
+      reject(new Error('Connection closed'));
+    }
+    this.pendingRequests.clear();
+
+    // Call the registered callback if available
+    if (this.onConnectionClosedCallback) {
+      this.onConnectionClosedCallback();
+    }
   }
 }

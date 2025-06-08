@@ -8,7 +8,12 @@
     "dev": "vite",
     "build": "vite build",
     "build:tsc": "tsc",
+    "build:bun": "bun build --compile --outfile=bin/nanobrowser-mcp-host-bun src/index.ts",
+    "build:all": "npm run build && npm run build:bun",
     "start": "node dist/index.js",
+    "install:host": "node scripts/install-host.js",
+    "uninstall:host": "node scripts/uninstall-host.js",
+    "deploy": "npm run build:all && npm run install:host",
     "test": "LOG_LEVEL=debug vitest run",
     "test:watch": "LOG_LEVEL=debug vitest",
     "test:unit": "LOG_LEVEL=debug vitest run tests/unit",
@@ -56,5 +61,8 @@
     "transform": {
       "^.+\\.tsx?$": "ts-jest"
     }
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

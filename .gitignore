@@ -28,3 +28,6 @@ chrome-extension/public/manifest.json
 
 # messaging config file
 ai.nanobrowser.mcp.host.json
+
+# bin
+bin

@@ -75,7 +75,7 @@ function checkExistingInstance(): boolean {
     try {
       process.kill(existingPid, 0); // Signal 0 checks if process exists without killing it
       logger.warn(`Another MCP Host instance is already running with PID: ${existingPid}`);
-      return true;
+      return true; // Process exists, return true to indicate existing instance
     } catch (error) {
       // Process doesn't exist, remove stale PID file
       logger.info(`Removing stale PID file for non-existent process ${existingPid}`);
@@ -118,6 +118,21 @@ const mcpServerManager = new McpServerManager({
 // Initialize the native messaging handler
 const messaging = new NativeMessaging();
 
+// Register connection closed handler for graceful shutdown
+messaging.onConnectionClosed(async () => {
+  logger.info('Chrome connection closed - initiating graceful shutdown');
+  
+  // Shut down MCP server if it's running
+  if (mcpServerManager.isServerRunning()) {
+    logger.info('Shutting down MCP server due to connection close');
+    await mcpServerManager.shutdown();
+  }
+
+  // Clean up PID file and exit
+  removePidFile();
+  process.exit(0);
+});
+
 // Register handlers
 messaging.registerHandler('init', async () => {
   logger.info('mcp_host received init');
@@ -147,6 +162,36 @@ messaging.registerRpcMethod('ping', async (req: RpcRequest): Promise<RpcResponse
   };
 });
 
+// Register RPC methods for tools - these will be called by Chrome extension
+messaging.registerRpcMethod('navigate_to', async (req: RpcRequest): Promise<RpcResponse> => {
+  logger.info('received navigate_to request:', req);
+  
+  // TODO: Implement actual navigation logic or forward to browser extension
+  // For now, return a success response
+  return {
+    result: {
+      success: true,
+      url: req.params?.url,
+      message: `Navigation to ${req.params?.url} initiated`,
+    },
+  };
+});
+
+messaging.registerRpcMethod('run_task', async (req: RpcRequest): Promise<RpcResponse> => {
+  logger.info('received run_task request:', req);
+  
+  // TODO: Implement actual task execution logic or forward to browser extension
+  // For now, return a success response
+  return {
+    result: {
+      success: true,
+      task: req.params?.task,
+      message: `Task "${req.params?.task}" execution initiated`,
+      executionTime: 0,
+    },
+  };
+});
+
 const lowLevelToolsEnabled = process.env.LOW_LEVEL_TOOLS_ENABLED === 'true'
 
 // Register resources with the MCP server manager
@@ -171,17 +216,20 @@ mcpServerManager
     if (result) {
       logger.info(`MCP HTTP server auto-started successfully on port ${mcpServerPort}`);
     } else {
-      logger.error('Failed to auto-start MCP HTTP server: Server already running');
+      logger.warn('Failed to auto-start MCP HTTP server: Server already running');
+      // Don't exit - the host can still function for native messaging
     }
   })
   .catch((error: Error & { code?: string }) => {
     if (error.code === 'EADDRINUSE') {
-      logger.error(`Exception during MCP HTTP server auto-start: Port ${mcpServerPort} is already in use`);
+      logger.warn(`Port ${mcpServerPort} is already in use - MCP Host will continue without HTTP server`);
+      logger.info('Native messaging functionality will still work normally');
     } else {
       logger.error('Exception during MCP HTTP server auto-start:', error);
+      // Only exit for non-port-conflict errors
+      removePidFile();
+      process.exit(1);
     }
-
-    process.exit(1); // Exit with error code to indicate failure
   });
 
 // Send initial ready message to let the extension know we're available

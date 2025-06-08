@@ -432,9 +432,9 @@ ${BOLD}EXAMPLES:${NC}
 
 ${BOLD}MODES:${NC}
   ${BOLD}Production Mode (default):${NC}
-    • Copies files to ~/.nanobrowser/app/
-    • Stable deployment setup
-    • Requires reinstallation for updates
+    • Uses Bun compiled binary (standalone executable)
+    • Self-contained, no Node.js dependencies required
+    • Requires rebuild and reinstallation for updates
 
   ${BOLD}Development Mode (--dev):${NC}
     • Runs directly from source directory
@@ -526,60 +526,46 @@ fi
 # Perform pre-installation cleanup
 pre_install_cleanup $FORCE_MODE
 
-# Skip build since we've already built it
-print_message "${GREEN}Using existing build for Nanobrowser MCP Native Messaging Host...${NC}"
+# Check if Bun binary exists
+BUN_BINARY="$SCRIPT_DIR/bin/nanobrowser-mcp-host-bun"
+if [ ! -f "$BUN_BINARY" ]; then
+  error_exit "Bun binary not found at $BUN_BINARY. Please run 'npm run build:bun' first."
+fi
+
+print_message "${GREEN}Using Bun compiled binary for Nanobrowser MCP Native Messaging Host...${NC}"
 cd "$SCRIPT_DIR"
 
 # Create required directories
 NANOBROWSER_DIR="$HOME/.nanobrowser"
 LOGS_DIR="$NANOBROWSER_DIR/logs"
 BIN_DIR="$NANOBROWSER_DIR/bin"
-APP_DIR="$NANOBROWSER_DIR/app"
 
 mkdir -p "$LOGS_DIR"
 mkdir -p "$BIN_DIR"
-mkdir -p "$APP_DIR"
 
 print_message "${BLUE}Directories created:${NC}"
 print_message "${BLUE}  - Log directory: ${BOLD}$LOGS_DIR${NC}"
 print_message "${BLUE}  - Binary directory: ${BOLD}$BIN_DIR${NC}"
-print_message "${BLUE}  - Application directory: ${BOLD}$APP_DIR${NC}"
 
-# Copy application files (skip in development mode)
-if [ "$DEV_MODE" = true ]; then
-  print_message "${YELLOW}Development mode: Skipping file copy, will run directly from source${NC}"
-  if [ ! -d "$SCRIPT_DIR/dist" ]; then
-    error_exit "Build directory 'dist' not found. Please build the project first with 'npm run build'."
-  fi
-  if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
-    error_exit "node_modules directory not found. Please run 'npm install' first."
-  fi
-else
-  print_message "${BLUE}Copying application files...${NC}"
-  if [ -d "$SCRIPT_DIR/dist" ]; then
-    cp -r "$SCRIPT_DIR/dist"/* "$APP_DIR/"
-    
-    # Copy node_modules for dependencies (preserving symlinks for pnpm compatibility)
-    print_message "${BLUE}Copying dependencies...${NC}"
-    if [ -d "$SCRIPT_DIR/node_modules" ]; then
-      cp -a "$SCRIPT_DIR/node_modules" "$APP_DIR/"
-      print_message "${GREEN}Dependencies copied successfully (symlinks preserved).${NC}"
-    else
-      print_message "${YELLOW}Warning: node_modules directory not found. Dependencies may be missing.${NC}"
-    fi
-    
-    print_message "${GREEN}Application files copied successfully.${NC}"
-  else
-    error_exit "Build directory 'dist' not found. Please build the project first with 'npm run build'."
-  fi
-fi
+# Copy the Bun binary
+print_message "${BLUE}Installing Bun binary...${NC}"
+cp "$BUN_BINARY" "$BIN_DIR/nanobrowser-mcp-host"
+chmod +x "$BIN_DIR/nanobrowser-mcp-host"
+print_message "${GREEN}Bun binary installed successfully.${NC}"
 
 # Create the host script
 HOST_SCRIPT="$BIN_DIR/mcp-host.sh"
 print_message "${BLUE}Creating host script: ${BOLD}$HOST_SCRIPT${NC}"
 
 if [ "$DEV_MODE" = true ]; then
-  # Development mode: run directly from dist directory
+  # Development mode: run directly from source using Node.js
+  if [ ! -d "$SCRIPT_DIR/dist" ]; then
+    error_exit "Build directory 'dist' not found. Please build the project first with 'npm run build'."
+  fi
+  if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
+    error_exit "node_modules directory not found. Please run 'npm install' first."
+  fi
+  
   cat > "$HOST_SCRIPT" << EOF
 #!/bin/bash
 
@@ -596,11 +582,11 @@ mkdir -p "\$LOG_DIR"
 # Development mode: run directly from source dist directory
 cd "$SCRIPT_DIR/dist"
 
-# Run MCP host - logs are handled internally by the Logger class
+# Run MCP host using Node.js - logs are handled internally by the Logger class
 node index.js
 EOF
 else
-  # Production mode: run from installed location
+  # Production mode: use the Bun compiled binary
   cat > "$HOST_SCRIPT" << EOF
 #!/bin/bash
 
@@ -614,11 +600,9 @@ export LOG_FILE="mcp-host.log"
 # Create logs directory if it doesn't exist
 mkdir -p "\$LOG_DIR"
 
-# Use the application from the installed location
-cd "$APP_DIR"
-
-# Run MCP host - logs are handled internally by the Logger class
-node index.js
+# Production mode: use the Bun compiled binary
+# The binary is self-contained and doesn't need Node.js
+"$BIN_DIR/nanobrowser-mcp-host"
 EOF
 fi
 
@@ -727,7 +711,7 @@ if [ "$DEV_MODE" = true ]; then
   print_message "${BLUE}• To switch to production mode: ./install.sh (without --dev flag)${NC}"
 else
   print_message "${BLUE}${BOLD}Production Mode Notes:${NC}"
-  print_message "${BLUE}• Host runs from copied files in $APP_DIR${NC}"
-  print_message "${BLUE}• To update: rebuild and run ./install.sh again${NC}"
+  print_message "${BLUE}• Host runs from Bun compiled binary${NC}"
+  print_message "${BLUE}• To update: rebuild with 'npm run build:bun' and run ./install.sh again${NC}"
   print_message "${BLUE}• For development mode: ./install.sh --dev${NC}"
 fi
