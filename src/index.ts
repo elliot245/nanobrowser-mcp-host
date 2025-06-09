@@ -141,10 +141,22 @@ messaging.registerHandler('init', async () => {
 messaging.registerHandler('shutdown', async () => {
   logger.info('mcp_host received shutdown');
 
-  // Shut down MCP server if it's running
-  if (mcpServerManager.isServerRunning()) {
-    logger.info('Shutting down MCP server');
-    await mcpServerManager.shutdown();
+  try {
+    // Shut down MCP server if it's running
+    if (mcpServerManager.isServerRunning()) {
+      logger.info('Shutting down MCP server');
+      await mcpServerManager.shutdown();
+      logger.info('MCP server shutdown complete');
+    }
+
+    // Clean up PID file and exit gracefully
+    removePidFile();
+    logger.info('Shutdown complete, exiting');
+    process.exit(0);
+  } catch (error) {
+    logger.error('Error during shutdown:', error);
+    removePidFile();
+    process.exit(1);
   }
 });
 
