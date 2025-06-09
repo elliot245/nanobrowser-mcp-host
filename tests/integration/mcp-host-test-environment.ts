@@ -1,9 +1,9 @@
-import * as net from 'net';
 import { ChildProcess, spawn } from 'child_process';
-import { McpHttpClient } from './mcp-http-client';
-import { MessageHandler, type RpcHandler, RpcRequest, RpcRequestOptions, RpcResponse } from '../../src/types';
-import { NativeMessaging } from '../../src/messaging.js';
+import * as net from 'net';
 import { createLogger } from '../../src/logger';
+import { NativeMessaging } from '../../src/messaging.js';
+import { MessageHandler, type RpcHandler, RpcRequest, RpcRequestOptions, RpcResponse } from '../../src/types';
+import { McpHttpClient } from './mcp-http-client';
 
 /**
  * Test environment for MCP Host integration tests
@@ -15,6 +15,7 @@ export class McpHostTestEnvironment {
   private hostProcess: ChildProcess | null = null;
   private mcpClient: McpHttpClient | null = null;
   private nativeMessaging: NativeMessaging | null = null;
+  private testNanobrowserDir: string | null = null;
 
   private port: number;
   private exitCode: number | null = null;
@@ -109,20 +110,31 @@ export class McpHostTestEnvironment {
       this.port = await this.findAvailablePort();
     }
 
-    // Clean up any existing PID files to avoid conflicts
-    const { homedir } = await import('os');
+    // Create unique test instance directory to avoid conflicts
+    const { tmpdir } = await import('os');
     const { join } = await import('path');
-    const { existsSync, unlinkSync } = await import('fs');
+    const { existsSync, mkdirSync, rmSync } = await import('fs');
     
-    const pidFilePath = join(homedir(), '.nanobrowser', 'mcp-host.pid');
-    if (existsSync(pidFilePath)) {
+    // Create a unique test instance ID
+    const testInstanceId = `test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const testNanobrowserDir = join(tmpdir(), 'nanobrowser-test', testInstanceId);
+    
+    // Clean up any existing test directory
+    if (existsSync(testNanobrowserDir)) {
       try {
-        unlinkSync(pidFilePath);
-        this.logger.debug('Cleaned up existing PID file');
+        rmSync(testNanobrowserDir, { recursive: true, force: true });
+        this.logger.debug('Cleaned up existing test directory');
       } catch (error) {
-        this.logger.warn('Failed to clean up PID file:', error);
+        this.logger.warn('Failed to clean up test directory:', error);
       }
     }
+    
+    // Create the test directory
+    mkdirSync(testNanobrowserDir, { recursive: true });
+    this.logger.debug(`Created test directory: ${testNanobrowserDir}`);
+    
+    // Store the test directory for cleanup
+    this.testNanobrowserDir = testNanobrowserDir;
 
     // Start the MCP host process with mock stdio and the selected port
     this.hostProcess = spawn('node', ['./dist/index.js'], {
@@ -131,7 +143,8 @@ export class McpHostTestEnvironment {
         ...process.env,
         LOG_LEVEL: 'DEBUG',
         PORT: this.port.toString(),
-        LOW_LEVEL_TOOLS_ENABLED: 'true'
+        LOW_LEVEL_TOOLS_ENABLED: 'true',
+        NANOBROWSER_HOME: testNanobrowserDir, // Use isolated directory for this test instance
       },
     });
 
@@ -200,6 +213,20 @@ export class McpHostTestEnvironment {
       }
 
       this.hostProcess = null;
+    }
+
+    // Clean up the test directory
+    if (this.testNanobrowserDir) {
+      try {
+        const { existsSync, rmSync } = await import('fs');
+        if (existsSync(this.testNanobrowserDir)) {
+          rmSync(this.testNanobrowserDir, { recursive: true, force: true });
+          this.logger.debug(`Cleaned up test directory: ${this.testNanobrowserDir}`);
+        }
+      } catch (error) {
+        this.logger.warn('Failed to clean up test directory:', error);
+      }
+      this.testNanobrowserDir = null;
     }
   }
 

@@ -8,8 +8,8 @@
  */
 
 import * as fs from 'fs';
-import * as path from 'path';
 import * as os from 'os';
+import * as path from 'path';
 
 // Log levels in order of verbosity
 export enum LogLevel {
@@ -44,7 +44,8 @@ function getLogLevel(): LogLevel {
 // Get log file path from environment or use default
 function getLogFilePath(): string {
   const homeDir = os.homedir();
-  const logDir = process.env.LOG_DIR || path.join(homeDir, '.nanobrowser', 'logs');
+  const nanobrowserHome = process.env.NANOBROWSER_HOME || path.join(homeDir, '.nanobrowser');
+  const logDir = process.env.LOG_DIR || path.join(nanobrowserHome, 'logs');
   const logFile = process.env.LOG_FILE || 'mcp-host.log';
   return path.join(logDir, logFile);
 }

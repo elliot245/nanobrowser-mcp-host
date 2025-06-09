@@ -18,8 +18,8 @@ const HOST_INFO = {
   runMode: process.env.RUN_MODE || 'stdio',
 };
 
-// PID file management
-const nanobrowserDir = path.join(os.homedir(), '.nanobrowser');
+// PID file management - support environment variable for custom directory
+const nanobrowserDir = process.env.NANOBROWSER_HOME || path.join(os.homedir(), '.nanobrowser');
 const pidFilePath = path.join(nanobrowserDir, 'mcp-host.pid');
 
 /**
